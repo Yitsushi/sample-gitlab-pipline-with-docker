@@ -5,6 +5,7 @@
 
 <body>
   <h1>It works :)</h1>
+
   <pre>
     Current hostname: <?php echo gethostname() ?>
   </pre>

@@ -1,5 +1,6 @@
 stages:
   - build
+  - staging
   - deploy
 
 variables:
@@ -20,12 +21,12 @@ build:
     - donotuseit
 
 staging:
-  stage: deploy
+  stage: staging
   script:
     - docker pull $CONTAINER_RELEASE_IMAGE
-    - docker ps | grep "$RUNNING_CONTAINER_NAME" >/dev/null && docker stop $RUNNING_CONTAINER_NAME && docker rm $RUNNING_CONTAINER_NAME
+    - docker-delete-container "$RUNNING_CONTAINER_NAME"
     - docker run -d --restart always --name $RUNNING_CONTAINER_NAME $CONTAINER_RELEASE_IMAGE
-    - sudo /usr/local/sbin/docker-staging $STAGING_URL `docker inspect --format '{{ .NetworkSettings.IPAddress }}' $RUNNING_CONTAINER_NAME`
+    - sudo /usr/local/sbin/docker-staging "$STAGING_URL" "$RUNNING_CONTAINER_NAME"
   tags:
     - donotuseit
   except:
@@ -37,9 +38,9 @@ staging:
     on_stop: stop_staging_app
 
 stop_staging_app:
-  stage: deploy
+  stage: staging
   script:
-    - docker ps | grep "$RUNNING_CONTAINER_NAME" >/dev/null && docker stop $RUNNING_CONTAINER_NAME && docker rm $RUNNING_CONTAINER_NAME
+    - docker-delete-container "$RUNNING_CONTAINER_NAME"
     - sudo /usr/local/sbin/docker-destaging $STAGING_URL
   when: manual
   except:
@@ -56,9 +57,9 @@ production:
   stage: deploy
   script:
     - docker pull $CONTAINER_RELEASE_IMAGE
-    - docker ps | grep "$RUNNING_CONTAINER_NAME" >/dev/null && docker stop $RUNNING_CONTAINER_NAME && docker rm $RUNNING_CONTAINER_NAME
+    - docker-delete-container "$RUNNING_CONTAINER_NAME"
     - docker run -d --restart always --name $RUNNING_CONTAINER_NAME $CONTAINER_RELEASE_IMAGE
-    - sudo /usr/local/sbin/docker-staging $PRODUCTION_URL `docker inspect --format '{{ .NetworkSettings.IPAddress }}' $RUNNING_CONTAINER_NAME`
+    - sudo /usr/local/sbin/docker-staging "$PRODUCTION_URL" "$RUNNING_CONTAINER_NAME"
   tags:
     - donotuseit
   environment:

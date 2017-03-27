@@ -1,0 +1,64 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  CONTAINER_RELEASE_IMAGE: registry.gitlab.cheppers.com/infranet/sample-ecs-container:$CI_BUILD_REF
+  STAGING_URL: $CI_BUILD_REF_NAME.sample-ecs-container.staging.cheppersdev.com
+  PRODUCTION_URL: sample-ecs-container.cheppersdev.com
+  RUNNING_CONTAINER_NAME: sample-ecs-conatiner-$CI_BUILD_REF_NAME
+
+before_script:
+  - docker login -e gitlab@cheppers.com -u gitlab-ci-token -p $CI_BUILD_TOKEN registry.gitlab.cheppers.com
+
+build:
+  stage: build
+  script:
+    - docker build --pull -t $CONTAINER_RELEASE_IMAGE .
+    - docker push $CONTAINER_RELEASE_IMAGE
+  tags:
+    - donotuseit
+
+staging:
+  stage: deploy
+  script:
+    - docker pull $CONTAINER_RELEASE_IMAGE
+    - docker ps | grep "$RUNNING_CONTAINER_NAME" >/dev/null && docker stop $RUNNING_CONTAINER_NAME && docker rm $RUNNING_CONTAINER_NAME
+    - docker run -d --restart always --name $RUNNING_CONTAINER_NAME $CONTAINER_RELEASE_IMAGE
+    - sudo /usr/local/sbin/docker-staging $STAGING_URL `docker inspect --format '{{ .NetworkSettings.IPAddress }}' $RUNNING_CONTAINER_NAME`
+  tags:
+    - donotuseit
+  when: manual
+  environment:
+    name: staging/$CI_BUILD_REF_NAME
+    url: http://$CI_BUILD_REF_NAME.sample-ecs-container.staging.cheppersdev.com
+    on_stop: stop_staging_app
+
+stop_staging_app:
+  stage: deploy
+  script:
+    - docker ps | grep "$RUNNING_CONTAINER_NAME" >/dev/null && docker stop $RUNNING_CONTAINER_NAME && docker rm $RUNNING_CONTAINER_NAME
+    - sudo /usr/local/sbin/docker-destaging $STAGING_URL
+  when: manual
+  environment:
+    name: staging/$CI_BUILD_REF_NAME
+    action: stop
+  variables:
+    GIT_STRATEGY: none
+  tags:
+    - donotuseit
+
+production:
+  stage: deploy
+  script:
+    - docker pull $CONTAINER_RELEASE_IMAGE
+    - docker ps | grep "$RUNNING_CONTAINER_NAME" >/dev/null && docker stop $RUNNING_CONTAINER_NAME && docker rm $RUNNING_CONTAINER_NAME
+    - docker run -d --restart always --name $RUNNING_CONTAINER_NAME $CONTAINER_RELEASE_IMAGE
+    - sudo /usr/local/sbin/docker-staging $PRODUCTION_URL `docker inspect --format '{{ .NetworkSettings.IPAddress }}' $RUNNING_CONTAINER_NAME`
+  tags:
+    - donotuseit
+  environment:
+    name: staging
+    url: http://sample-ecs-container.cheppersdev.com
+  only:
+    - master
